@@ -2,6 +2,7 @@
 
 const int irPin = 2; //Sensor pin connect to digital pin2 (ATINY85 pin7)
 const int ledPin = 1;
+const int btnPin = 0;
 const int start_bit = 2200; //Start bit threshold (Microseconds)
 const int bin_1 = 1000; //Binary 1 threshold (Microseconds)
 const int bin_0 = 400; //Binary 0 threshold (Microseconds)
@@ -10,38 +11,31 @@ int flag = 1;  //flag of media key
 
 void setup() {
   pinMode(irPin, INPUT);
+  pinMode(btnPin, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
   TrinketHidCombo.begin();
   TrinketHidCombo.pressKey(0, 0);
-  TrinketHidCombo.pressKey(0, 0);
+  TrinketHidCombo.mouseMove(0, 0, 0);
+  digitalWrite(ledPin, HIGH);
+  delay(100);
+  digitalWrite(ledPin, LOW);
 }
 
-void loop() {
-  int key = getIRKey();        //Fetch the key
-  if (key > 0 ) {          //Ignore keys that are zero
-    sendKey(key);
-    //    delay(10);
-    if (pulseIn(irPin, HIGH) > start_bit) {
-      int num = 0;
-      while (pulseIn(irPin, HIGH) > start_bit) {
-        if (num > 5) {
-//          digitalWrite(ledPin, LOW);
-          if (flag) {
-            sendKey(key);
-          }
-          digitalWrite(ledPin, HIGH);
-        }
-        num++;
-      }
-      digitalWrite(ledPin, LOW);
+// 真正的循环 在没有接收到红外时会调用
+void realLoop(){
+  TrinketHidCombo.poll();
+  if (!digitalRead(btnPin)) {
+    digitalWrite(ledPin, HIGH);
+    TrinketHidCombo.mouseMove(0, 0, MOUSEBTN_RIGHT_MASK);
+    while (!digitalRead(btnPin)) {
+      TrinketHidCombo.poll();
     }
-    if (!flag) {
-      TrinketHidCombo.pressKey(0, 0);
-    }
+    TrinketHidCombo.mouseMove(0, 0, 0);
+    digitalWrite(ledPin, LOW);
   }
-
 }
 
+// 按键码映射
 void sendKey(int key) {
   flag = 0;
   switch (key)
@@ -62,26 +56,23 @@ void sendKey(int key) {
     case 67: TrinketHidCombo.pressKey(0, KEYCODE_ARROW_RIGHT); break;
     case 64: TrinketHidCombo.pressKey(0, KEYCODE_ARROW_DOWN); break;
     case 70: TrinketHidCombo.pressKey(0, KEYCODE_ARROW_UP); break;
-    case 25: TrinketHidCombo.pressMultimediaKey(MMKEY_VOL_UP); flag=1; break;
-    case 22: TrinketHidCombo.pressMultimediaKey(MMKEY_VOL_DOWN); flag=1; break;
-    case 7: TrinketHidCombo.pressMultimediaKey(MMKEY_SCAN_PREV_TRACK); flag=1; break;
-    case 21: TrinketHidCombo.pressMultimediaKey(MMKEY_SCAN_NEXT_TRACK); flag=1; break;
-    case 9: TrinketHidCombo.pressMultimediaKey(MMKEY_PLAYPAUSE); flag=1; break;
+    case 25: TrinketHidCombo.pressMultimediaKey(MMKEY_VOL_UP); flag = 1; break;
+    case 22: TrinketHidCombo.pressMultimediaKey(MMKEY_VOL_DOWN); flag = 1; break;
+    case 7: TrinketHidCombo.pressMultimediaKey(MMKEY_SCAN_PREV_TRACK); flag = 1; break;
+    case 21: TrinketHidCombo.pressMultimediaKey(MMKEY_SCAN_NEXT_TRACK); flag = 1; break;
+    case 9: TrinketHidCombo.pressMultimediaKey(MMKEY_PLAYPAUSE); flag = 1; break;
   }
   if (flag) {
     TrinketHidCombo.pressKey(0, 0);
   }
 }
 
-/////////////////////////////////////////////////////////////
-// decode infrared signal
-/////////////////////////////////////////////////////////////
+// 获取按键码
 int getIRKey() {
   int data[BIT_PER_BLOCK];
   int i;
   while (pulseIn(irPin, HIGH) < start_bit) { //Wait for a start bit
-    //    TrinketHidCombo.pressKey(0, 0);
-    TrinketHidCombo.poll();
+    realLoop();
   }
 
   digitalWrite(ledPin, HIGH);
@@ -113,3 +104,30 @@ int getIRKey() {
 
   return result; //Return key number
 }
+
+// 真正的循环在 realLoop()
+void loop() {
+  int key = getIRKey();        //Fetch the key
+  if (key > 0 ) {          //Ignore keys that are zero
+    sendKey(key);
+    //    delay(10);
+    if (pulseIn(irPin, HIGH) > start_bit) {
+      int num = 0;
+      while (pulseIn(irPin, HIGH) > start_bit) {
+        if (num > 5) {
+          //          digitalWrite(ledPin, LOW);
+          if (flag) {
+            sendKey(key);
+          }
+          digitalWrite(ledPin, HIGH);
+        }
+        num++;
+      }
+      digitalWrite(ledPin, LOW);
+    }
+    if (!flag) {
+      TrinketHidCombo.pressKey(0, 0);
+    }
+  }
+}
+
